@@ -1,7 +1,5 @@
 # Splunk Handler
 
-[![Build](https://img.shields.io/travis/zach-taylor/splunk_handler.svg?style=flat-square)](https://travis-ci.org/zach-taylor/splunk_handler)
-[![Code Climate](https://img.shields.io/codeclimate/maintainability/zach-taylor/splunk_handler.svg?style=flat-square)](https://codeclimate.com/github/zach-taylor/splunk_handler/maintainability)
 [![PyPI](https://img.shields.io/pypi/v/splunk_handler.svg?style=flat-square)](https://pypi.python.org/pypi/splunk_handler)
 
 **Splunk Handler is a Python Logger for sending logged events to an installation of Splunk Enterprise.**
@@ -19,12 +17,18 @@ def lambda_handler(event, context):
     force_flush()  # Flush logs in a blocking manner
 ~~~
 
+## Introduction
+
+This package is based on the splunk_handler of [Zach Tylor](https://github.com/zach-taylor/splunk_handler).
+The adjustment in this package enables json format in event that sent to spunk. Additionally, it is designed to
+suit logging of [zuul components](https://zuul-ci.org/docs/zuul/discussion/components.html). Thus, the source-type
+will reflect the zuul service and the event will contains eventId and buildId within zuul log.
 
 ## Installation
 
 Pip:
 
-    pip install splunk_handler
+    pip install splunk_handler_zuul
 
 Manual:
 
@@ -45,7 +49,8 @@ Example:
         host='splunk.example.com',
         port='8088',
         token='851A5E58-4EF1-7291-F947-F614A76ACB21',
-        index='main'
+        index='main',
+        record_format=True
         #allow_overrides=True # whether to look for _<param in log data (ex: _index)
         #debug=True # whether to print module activity to stdout, defaults to False
         #flush_interval=15.0, # send batch of logs every n sec, defaults to 15.0, set '0' to block thread & send immediately
@@ -71,9 +76,6 @@ Example:
 
     logging.warning('hello!')
 ~~~
-
-I would recommend using a JSON formatter with this to receive your logs in JSON format.
-Here is an open source one: https://github.com/madzak/python-json-logger
 
 ### Logging Config
 
@@ -125,10 +127,6 @@ LOGGING = {
 }
 ~~~
 
-Then, do `logging.config.dictConfig(LOGGING)` to configure your logging.
-
-Note: I included a configuration for the JSON formatter mentioned above.
-
 Here is an example file config, and how it might be used in a config file:
 
 ~~~
@@ -156,29 +154,13 @@ class=splunk_handler.SplunkHandler
 level=%(loglevel)s
 formatter=simpleFormatter
 args=('my-splunk-host.me.com', '', os.environ.get('SPLUNK_TOKEN_DEV', 'changeme'), 'my_index')
-kwargs={'url':'https://my-splunk-host.me.com/services/collector/event', 'verify': False}
+kwargs={'url':'https://my-splunk-host.me.com/services/collector/event', 'verify': False, 'record_format': True}
 
 [formatter_simpleFormatter]
 format=[%(asctime)s] %(levelname)s - %(module)s: %(message)s
 datefmt=%m/%d/%Y %I:%M:%S %p %Z
 
 ~~~
-
-## Retry Logic
-
-This library uses the built-in retry logic from urllib3 (a retry
-counter and a backoff factor). Should the defaults not be desireable,
-you can find more information about how to best configure these
-settings in the [urllib3 documentation](https://github.com/kennethreitz/requests/blob/b2289cd2d5d21bd31cf4a818a4e0ff6951b2317a/requests/packages/urllib3/util/retry.py#L104).
-
-## Contributing
-
-Feel free to contribute an issue or pull request:
-
-1. Check for existing issues and PRs
-2. Fork the repo, and clone it locally
-3. Create a new branch for your contribution
-4. Push to your fork and submit a pull request
 
 ## License
 

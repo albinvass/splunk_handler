@@ -3,6 +3,7 @@ import json
 import logging
 import socket
 import time
+import re
 import traceback
 from threading import Timer
 
@@ -205,21 +206,30 @@ class SplunkHandler(logging.Handler):
 
     def format_record(self, record):
         self.write_debug_log("format_record() called")
-
-        if self.record_format:
-            try:
-                record = json.dumps(record)
-            except Exception:
-                pass
-
         params = {
             'time': self.getsplunkattr(record, '_time', time.time()),
             'host': self.getsplunkattr(record, '_host', self.hostname),
             'index': self.getsplunkattr(record, '_index', self.index),
-            'source': record.pathname if self.source is None else self.source,
-            'sourcetype': self.getsplunkattr(record, '_sourcetype', self.sourcetype),
-            'event': self.format(record)
-        }
+            'source': record.pathname if self.source is None else self.source
+            }
+
+        if self.record_format:
+            record = record.__dict__
+            expected_event = {}
+            expected_event['name'] = record.get('name')
+            expected_event['level'] = record.get('levelname')
+            expected_event['message'] = record.get('msg')
+            event_id_match = re.search(r'\[e:(.[a-z0-9]*?)\]', record.get('msg'))
+            build_id_match = re.search(r'\[build:(.[a-z0-9]*?)\]', record.get('msg'))
+            expected_event['eventID'] = event_id_match.group(1) if event_id_match else None
+            expected_event['buildID'] = build_id_match.group(1) if build_id_match else None
+            expected_event['module'] = record.get('module')
+            expected_event['exc_info'] = record.get('exc_info')
+            expected_event['exc_text'] = record.get('exc_text')
+            expected_event['stack_info'] = record.get('stack_info')
+
+        params['sourcetype'] = self.getServiceName(params.get('host'))
+        params['event'] = json.dumps(expected_event) if self.record_format else self.format(record)
 
         self.write_debug_log("Record dictionary created")
 
@@ -227,6 +237,13 @@ class SplunkHandler(logging.Handler):
         self.write_debug_log("Record formatting complete")
 
         return formatted_record
+
+    def getServiceName(self, hostname):
+        service_group = hostname.split('-')
+        if len(service_group) > 2:
+            return service_group[0] + '-' + service_group[1]
+        else:
+            return hostname
 
     def getsplunkattr(self, obj, attr, default=None):
         val = default

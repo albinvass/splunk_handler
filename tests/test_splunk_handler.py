@@ -12,7 +12,7 @@ SPLUNK_HOST = 'splunk-server.example.com'
 SPLUNK_PORT = 1234
 SPLUNK_TOKEN = '851A5E58-4EF1-7291-F947-F614A76ACB21'
 SPLUNK_INDEX = 'test_index'
-SPLUNK_HOSTNAME = 'test_host'
+SPLUNK_HOSTNAME = 'zuul-web-db8db5795-wnk7v'
 SPLUNK_SOURCE = 'test_source'
 SPLUNK_SOURCETYPE = 'test_sourcetype'
 SPLUNK_VERIFY = False
@@ -44,6 +44,7 @@ class TestSplunkHandler(unittest.TestCase):
             queue_size=SPLUNK_QUEUE_SIZE,
             debug=SPLUNK_DEBUG,
             retry_count=SPLUNK_RETRY_COUNT,
+            record_format=True,
             retry_backoff=SPLUNK_RETRY_BACKOFF,
         )
 
@@ -82,14 +83,21 @@ class TestSplunkHandler(unittest.TestCase):
         for h in log.handlers:
             log.removeHandler(h)
 
+        formatter = logging.Formatter('[%(asctime)s] %(levelname)s - %(module)s: %(message)s')
+        self.splunk.setFormatter(formatter)
         log.addHandler(self.splunk)
-        log.warning('hello!')
+        log.warning('[e:8538dc593cf643fea68acb57c6ac12b8] Looking for lost builds')
 
         self.splunk.timer.join()  # Have to wait for the timer to exec
 
-        expected_output = '{"event": "hello!", "host": "%s", "index": "%s", "source": "%s", ' \
-                          '"sourcetype": "%s", "time": 10}' % \
-                          (SPLUNK_HOSTNAME, SPLUNK_INDEX, SPLUNK_SOURCE, SPLUNK_SOURCETYPE)
+        expected_output = '{"event": "{\\"name\\": \\"test\\", \\"level\\": \\"WARNING\\", ' + \
+                          '\\"message\\": \\"[e:8538dc593cf643fea68acb57c6ac12b8] Looking for lost builds\\", ' + \
+                          '\\"eventID\\": \\"8538dc593cf643fea68acb57c6ac12b8\\", ' + \
+                          '\\"buildID\\": null, \\"module\\": \\"test_splunk_handler\\", ' + \
+                          '\\"exc_info\\": null, \\"exc_text\\": null, \\"stack_info\\": null}", ' + \
+                          '"host": "zuul-web-db8db5795-wnk7v", "index": "test_index", ' \
+                          '"source": "%s", "sourcetype": "zuul-web", "time": 10}' % \
+                          (SPLUNK_SOURCE)
 
         self.mock_request.assert_called_once_with(
             RECEIVER_URL,
@@ -116,9 +124,13 @@ class TestSplunkHandler(unittest.TestCase):
 
         self.splunk.timer.join()  # Have to wait for the timer to exec
 
-        expected_output = '{"event": "hello!", "host": "host", "index": "index", ' \
-                          '"source": "%s", "sourcetype": "%s", "time": 5}' % \
-                          (SPLUNK_SOURCE, SPLUNK_SOURCETYPE)
+        expected_output = '{"event": "{\\"name\\": \\"test\\", \\"level\\": \\"WARNING\\", ' + \
+                          '\\"message\\": \\"hello!\\", \\"eventID\\": null, ' + \
+                          '\\"buildID\\": null, \\"module\\": \\"test_splunk_handler\\", ' + \
+                          '\\"exc_info\\": null, \\"exc_text\\": null, \\"stack_info\\": null}", ' + \
+                          '"host": "host", "index": "index", ' \
+                          '"source": "%s", "sourcetype": "host", "time": 5}' % \
+                          (SPLUNK_SOURCE)
 
         self.mock_request.assert_called_once_with(
             RECEIVER_URL,
@@ -176,9 +188,13 @@ class TestSplunkHandler(unittest.TestCase):
         # if this doesnt wait correctly, we'd expect to be missing calls to mock_request
         self.splunk.wait_until_empty()
 
-        expected_output = '{"event": "hello!", "host": "host", "index": "index", ' \
-                          '"source": "%s", "sourcetype": "%s", "time": 5}' % \
-                          (SPLUNK_SOURCE, SPLUNK_SOURCETYPE)
+        expected_output = '{"event": "{\\"name\\": \\"test\\", \\"level\\": \\"WARNING\\", ' + \
+                          '\\"message\\": \\"hello!\\", \\"eventID\\": null, ' + \
+                          '\\"buildID\\": null, \\"module\\": \\"test_splunk_handler\\", ' + \
+                          '\\"exc_info\\": null, \\"exc_text\\": null, \\"stack_info\\": null}", ' + \
+                          '"host": "host", "index": "index", ' \
+                          '"source": "%s", "sourcetype": "host", "time": 5}' % \
+                          (SPLUNK_SOURCE)
 
         # two batches of 10 messages sent
         self.mock_request.assert_has_calls([call(
