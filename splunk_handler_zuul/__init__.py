@@ -214,25 +214,15 @@ class SplunkHandler(logging.Handler):
             }
 
         if self.record_format:
-            record = record.__dict__
-            expected_event = {}
-            expected_event['name'] = record.get('name')
-            expected_event['level'] = record.get('levelname')
-            raw_msg = record.get('msg')
-            for arg in list(record.get('args')):
-                raw_msg = raw_msg.replace('%s', arg, 1)
-            expected_event['message'] = raw_msg
-            event_id_match = re.search(r'\[e:(.[a-z0-9]*?)\]', expected_event['message'])
-            build_id_match = re.search(r'\[build:(.[a-z0-9]*?)\]', expected_event['message'])
-            expected_event['eventID'] = event_id_match.group(1) if event_id_match else None
-            expected_event['buildID'] = build_id_match.group(1) if build_id_match else None
-            expected_event['module'] = record.get('module')
-            expected_event['exc_info'] = record.get('exc_info')
-            expected_event['exc_text'] = record.get('exc_text')
-            expected_event['stack_info'] = record.get('stack_info')
+            record = self.format(record)
+            record_dict = json.loads(record)
+            event_id_match = re.search(r'\[e:(.[a-z0-9]*?)\]', record_dict['message'])
+            build_id_match = re.search(r'\[build:(.[a-z0-9]*?)\]', record_dict['message'])
+            record_dict['eventID'] = event_id_match.group(1) if event_id_match else None
+            record_dict['buildID'] = build_id_match.group(1) if build_id_match else None
 
         params['sourcetype'] = self.getServiceName(params.get('host'))
-        params['event'] = json.dumps(expected_event) if self.record_format else self.format(record)
+        params['event'] = json.dumps(record_dict) if self.record_format else self.format(record)
 
         self.write_debug_log("Record dictionary created")
 
