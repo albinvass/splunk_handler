@@ -86,7 +86,7 @@ class TestSplunkHandler(unittest.TestCase):
         formatter = logging.Formatter('[%(asctime)s] %(levelname)s - %(module)s: %(message)s')
         self.splunk.setFormatter(formatter)
         log.addHandler(self.splunk)
-        log.warning('[e:8538dc593cf643fea68acb57c6ac12b8] Looking for lost builds')
+        log.warning('%s Looking for lost %s', '[e:8538dc593cf643fea68acb57c6ac12b8]', 'builds')
 
         self.splunk.timer.join()  # Have to wait for the timer to exec
 

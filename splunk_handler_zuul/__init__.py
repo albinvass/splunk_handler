@@ -218,9 +218,12 @@ class SplunkHandler(logging.Handler):
             expected_event = {}
             expected_event['name'] = record.get('name')
             expected_event['level'] = record.get('levelname')
-            expected_event['message'] = record.get('msg')
-            event_id_match = re.search(r'\[e:(.[a-z0-9]*?)\]', record.get('msg'))
-            build_id_match = re.search(r'\[build:(.[a-z0-9]*?)\]', record.get('msg'))
+            raw_msg = record.get('msg')
+            for arg in list(record.get('args')):
+                raw_msg = raw_msg.replace('%s', arg, 1)
+            expected_event['message'] = raw_msg
+            event_id_match = re.search(r'\[e:(.[a-z0-9]*?)\]', expected_event['message'])
+            build_id_match = re.search(r'\[build:(.[a-z0-9]*?)\]', expected_event['message'])
             expected_event['eventID'] = event_id_match.group(1) if event_id_match else None
             expected_event['buildID'] = build_id_match.group(1) if build_id_match else None
             expected_event['module'] = record.get('module')
