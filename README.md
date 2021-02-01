@@ -48,7 +48,7 @@ Example:
         port='8088',
         token='851A5E58-4EF1-7291-F947-F614A76ACB21',
         index='main',
-        record_format=True
+        record_format=True # will make the output as json
         #allow_overrides=True # whether to look for _<param in log data (ex: _index)
         #debug=True # whether to print module activity to stdout, defaults to False
         #flush_interval=15.0, # send batch of logs every n sec, defaults to 15.0, set '0' to block thread & send immediately
@@ -155,8 +155,8 @@ args=('my-splunk-host.me.com', '', os.environ.get('SPLUNK_TOKEN_DEV', 'changeme'
 kwargs={'url':'https://my-splunk-host.me.com/services/collector/event', 'verify': False, 'record_format': True}
 
 [formatter_simpleFormatter]
-format=[%(asctime)s] %(levelname)s - %(module)s: %(message)s
-datefmt=%m/%d/%Y %I:%M:%S %p %Z
+class=pythonjsonlogger.jsonlogger.JsonFormatter
+format=%(asctime)s %(levelname)s %(name)s %(message)s
 
 ~~~
 
