@@ -5,7 +5,8 @@ import mock
 from mock import call
 from mock import patch
 
-from splunk_handler import SplunkHandler
+from splunk_handler_zuul import SplunkHandler
+from pythonjsonlogger import jsonlogger
 
 # These are intentionally different than the kwarg defaults
 SPLUNK_HOST = 'splunk-server.example.com'
@@ -71,7 +72,7 @@ class TestSplunkHandler(unittest.TestCase):
         self.assertEqual(self.splunk.retry_backoff, SPLUNK_RETRY_BACKOFF)
 
         self.assertFalse(logging.getLogger('requests').propagate)
-        self.assertFalse(logging.getLogger('splunk_handler').propagate)
+        self.assertFalse(logging.getLogger('splunk_handler_zuul').propagate)
 
     def test_splunk_worker(self):
         # Silence root logger
@@ -83,18 +84,19 @@ class TestSplunkHandler(unittest.TestCase):
         for h in log.handlers:
             log.removeHandler(h)
 
-        formatter = logging.Formatter('[%(asctime)s] %(levelname)s - %(module)s: %(message)s')
+        formatter = jsonlogger.JsonFormatter('%(asctime)s %(name)s %(levelname)s %(module)s %(message)s')
         self.splunk.setFormatter(formatter)
         log.addHandler(self.splunk)
         log.warning('%s Looking for lost %s', '[e:8538dc593cf643fea68acb57c6ac12b8]', 'builds')
 
         self.splunk.timer.join()  # Have to wait for the timer to exec
 
-        expected_output = '{"event": "{\\"name\\": \\"test\\", \\"level\\": \\"WARNING\\", ' + \
-                          '\\"message\\": \\"[e:8538dc593cf643fea68acb57c6ac12b8] Looking for lost builds\\", ' + \
-                          '\\"eventID\\": \\"8538dc593cf643fea68acb57c6ac12b8\\", ' + \
-                          '\\"buildID\\": null, \\"module\\": \\"test_splunk_handler\\", ' + \
-                          '\\"exc_info\\": null, \\"exc_text\\": null, \\"stack_info\\": null}", ' + \
+        expected_output = '{"event": "{\\"asctime\\": \\"1970-01-01 01:00:10,000\\", ' + \
+                          '\\"name\\": \\"test\\", \\"levelname\\": \\"WARNING\\", ' + \
+                          '\\"module\\": \\"test_splunk_handler\\", ' +\
+                          '\\"message\\": ' + \
+                          '\\"[e:8538dc593cf643fea68acb57c6ac12b8] Looking for lost builds\\", ' + \
+                          '\\"eventID\\": \\"8538dc593cf643fea68acb57c6ac12b8\\", \\"buildID\\": null}", ' + \
                           '"host": "zuul-web-db8db5795-wnk7v", "index": "test_index", ' \
                           '"source": "%s", "sourcetype": "zuul-web", "time": 10}' % \
                           (SPLUNK_SOURCE)
@@ -119,15 +121,17 @@ class TestSplunkHandler(unittest.TestCase):
         for h in log.handlers:
             log.removeHandler(h)
 
+        formatter = jsonlogger.JsonFormatter('%(asctime)s %(name)s %(levelname)s %(module)s %(message)s')
+        self.splunk.setFormatter(formatter)
         log.addHandler(self.splunk)
         log.warning('hello!', extra={'_time': 5, '_host': 'host', '_index': 'index'})
 
         self.splunk.timer.join()  # Have to wait for the timer to exec
 
-        expected_output = '{"event": "{\\"name\\": \\"test\\", \\"level\\": \\"WARNING\\", ' + \
-                          '\\"message\\": \\"hello!\\", \\"eventID\\": null, ' + \
-                          '\\"buildID\\": null, \\"module\\": \\"test_splunk_handler\\", ' + \
-                          '\\"exc_info\\": null, \\"exc_text\\": null, \\"stack_info\\": null}", ' + \
+        expected_output = '{"event": "{\\"asctime\\": \\"1970-01-01 01:00:10,000\\", ' + \
+                          '\\"name\\": \\"test\\", \\"levelname\\": \\"WARNING\\", ' + \
+                          '\\"module\\": \\"test_splunk_handler\\", ' +\
+                          '\\"message\\": \\"hello!\\", \\"eventID\\": null, \\"buildID\\": null}", ' + \
                           '"host": "host", "index": "index", ' \
                           '"source": "%s", "sourcetype": "host", "time": 5}' % \
                           (SPLUNK_SOURCE)
@@ -154,6 +158,8 @@ class TestSplunkHandler(unittest.TestCase):
         for h in log.handlers:
             log.removeHandler(h)
 
+        formatter = jsonlogger.JsonFormatter('%(asctime)s %(name)s %(levelname)s %(module)s %(message)s')
+        self.splunk.setFormatter(formatter)
         log.addHandler(self.splunk)
 
         for _ in range(20):
@@ -178,6 +184,8 @@ class TestSplunkHandler(unittest.TestCase):
         for h in log.handlers:
             log.removeHandler(h)
 
+        formatter = jsonlogger.JsonFormatter('%(asctime)s %(name)s %(levelname)s %(module)s %(message)s')
+        self.splunk.setFormatter(formatter)
         log.addHandler(self.splunk)
 
         # without force keep ahead, this would drop logs
@@ -188,10 +196,10 @@ class TestSplunkHandler(unittest.TestCase):
         # if this doesnt wait correctly, we'd expect to be missing calls to mock_request
         self.splunk.wait_until_empty()
 
-        expected_output = '{"event": "{\\"name\\": \\"test\\", \\"level\\": \\"WARNING\\", ' + \
-                          '\\"message\\": \\"hello!\\", \\"eventID\\": null, ' + \
-                          '\\"buildID\\": null, \\"module\\": \\"test_splunk_handler\\", ' + \
-                          '\\"exc_info\\": null, \\"exc_text\\": null, \\"stack_info\\": null}", ' + \
+        expected_output = '{"event": "{\\"asctime\\": \\"1970-01-01 01:00:10,000\\", ' + \
+                          '\\"name\\": \\"test\\", \\"levelname\\": \\"WARNING\\", ' + \
+                          '\\"module\\": \\"test_splunk_handler\\", ' +\
+                          '\\"message\\": \\"hello!\\", \\"eventID\\": null, \\"buildID\\": null}", ' + \
                           '"host": "host", "index": "index", ' \
                           '"source": "%s", "sourcetype": "host", "time": 5}' % \
                           (SPLUNK_SOURCE)
@@ -207,3 +215,4 @@ class TestSplunkHandler(unittest.TestCase):
 
         # verify no logs dropped
         mock_write_log.assert_not_called()
+
