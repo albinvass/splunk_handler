@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='splunk_handler_zuul',
-    version='0.0.3',
+    version='0.0.4',
     license='MIT License',
     description='A Python logging handler that sends zuul conponent logs to Splunk',
     long_description=open('README.md').read(),
