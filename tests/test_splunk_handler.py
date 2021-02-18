@@ -87,7 +87,7 @@ class TestSplunkHandler(unittest.TestCase):
         formatter = jsonlogger.JsonFormatter('%(asctime)s %(name)s %(levelname)s %(module)s %(message)s')
         self.splunk.setFormatter(formatter)
         log.addHandler(self.splunk)
-        log.warning('%s Looking for lost %s', '[e:8538dc593cf643fea68acb57c6ac12b8]', 'builds')
+        log.warning('%s Looking for lost %s', '[e: 8538dc593cf643fea68acb57c6ac12b8]', 'builds')
 
         self.splunk.timer.join()  # Have to wait for the timer to exec
 
@@ -95,8 +95,7 @@ class TestSplunkHandler(unittest.TestCase):
                           '\\"name\\": \\"test\\", \\"levelname\\": \\"WARNING\\", ' + \
                           '\\"module\\": \\"test_splunk_handler\\", ' +\
                           '\\"message\\": ' + \
-                          '\\"[e:8538dc593cf643fea68acb57c6ac12b8] Looking for lost builds\\", ' + \
-                          '\\"eventID\\": \\"8538dc593cf643fea68acb57c6ac12b8\\", \\"buildID\\": null}", ' + \
+                          '\\"[e: 8538dc593cf643fea68acb57c6ac12b8] Looking for lost builds\\"}", ' + \
                           '"host": "zuul-web-db8db5795-wnk7v", "index": "test_index", ' \
                           '"source": "%s", "sourcetype": "zuul-web", "time": 10}' % \
                           (SPLUNK_SOURCE)
@@ -131,7 +130,7 @@ class TestSplunkHandler(unittest.TestCase):
         expected_output = '{"event": "{\\"asctime\\": \\"1970-01-01 01:00:10,000\\", ' + \
                           '\\"name\\": \\"test\\", \\"levelname\\": \\"WARNING\\", ' + \
                           '\\"module\\": \\"test_splunk_handler\\", ' +\
-                          '\\"message\\": \\"hello!\\", \\"eventID\\": null, \\"buildID\\": null}", ' + \
+                          '\\"message\\": \\"hello!\\"}", ' + \
                           '"host": "host", "index": "index", ' \
                           '"source": "%s", "sourcetype": "host", "time": 5}' % \
                           (SPLUNK_SOURCE)
@@ -199,7 +198,7 @@ class TestSplunkHandler(unittest.TestCase):
         expected_output = '{"event": "{\\"asctime\\": \\"1970-01-01 01:00:10,000\\", ' + \
                           '\\"name\\": \\"test\\", \\"levelname\\": \\"WARNING\\", ' + \
                           '\\"module\\": \\"test_splunk_handler\\", ' +\
-                          '\\"message\\": \\"hello!\\", \\"eventID\\": null, \\"buildID\\": null}", ' + \
+                          '\\"message\\": \\"hello!\\"}", ' + \
                           '"host": "host", "index": "index", ' \
                           '"source": "%s", "sourcetype": "host", "time": 5}' % \
                           (SPLUNK_SOURCE)
