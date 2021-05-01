@@ -3,9 +3,8 @@ import json
 import logging
 import socket
 import time
-import re
 import traceback
-from threading import Timer
+from threading import Thread
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -49,8 +48,9 @@ class SplunkHandler(logging.Handler):
 
     def __init__(self, host, port, token, index,
                  allow_overrides=False, debug=False, flush_interval=15.0,
-                 force_keep_ahead=False, hostname=None, protocol='https',
-                 proxies=None, queue_size=DEFAULT_QUEUE_SIZE, record_format=False,
+                 force_keep_ahead=False, hostname=None,
+                 protocol='https', proxies=None,
+                 queue_size=DEFAULT_QUEUE_SIZE, record_format=False,
                  retry_backoff=2.0, retry_count=5, source=None,
                  sourcetype='text', timeout=60, url=None, verify=True):
         """
@@ -59,14 +59,18 @@ class SplunkHandler(logging.Handler):
             port (int): The port the host is listening on
             token (str): Authentication token
             index (str): Splunk index to write to
-            allow_overrides (bool): Whether to look for _<param> in log data (ex: _index)
+            allow_overrides (bool): Whether to look for _<param>
+                                    in log data (ex: _index)
             debug (bool): Whether to print debug console messages
-            flush_interval (float): How often to push events to splunk host in seconds
-            force_keep_ahead (bool): Sleep instead of dropping logs when queue fills
+            flush_interval (float): How often to push events
+                                    to splunk host in seconds
+            force_keep_ahead (bool): Sleep instead of dropping
+                                     logs when queue fills
             hostname (str): The Splunk Enterprise hostname
             protocol (str): The web protocol to use
             proxies (dict): The proxies to use for the request
-            queue_size (int): The max number of logs to queue, set to 0 for no max
+            queue_size (int): The max number of logs to queue,
+                              set to 0 for no max
             record_format (bool): Whether the log record will be json
             retry_backoff (float): The requests lib backoff factor
             retry_count (int): The number of times to retry a failed request
@@ -95,7 +99,8 @@ class SplunkHandler(logging.Handler):
         self.log_payload = ""
         self.SIGTERM = False  # 'True' if application requested exit
         self.timer = None
-        # It is possible to get 'behind' and never catch up, so we limit the queue size
+        # It is possible to get 'behind' and never catch
+        # up, so we limit the queue size
         self.queue = list()
         self.max_queue_size = max(queue_size, 0)  # 0 is min queue size
         self.debug = debug
@@ -106,14 +111,18 @@ class SplunkHandler(logging.Handler):
         self.proxies = proxies
         self.record_format = record_format
         self.processing_payload = False
+        self.running = False
         if not url:
-            self.url = '%s://%s:%s/services/collector' % (self.protocol, self.host, self.port)
+            self.url = '%s://%s:%s/services/collector' % (self.protocol,
+                                                          self.host,
+                                                          self.port)
         else:
             self.url = url
 
         # Keep ahead depends on queue size, so cannot be 0
         if self.force_keep_ahead and not self.max_queue_size:
-            self.write_log("Cannot keep ahead of unbound queue, using default queue size")
+            self.write_log(
+                "Cannot keep ahead of unbound queue, using default queue size")
             self.max_queue_size = DEFAULT_QUEUE_SIZE
 
         self.write_debug_log("Starting debug mode")
@@ -137,7 +146,8 @@ class SplunkHandler(logging.Handler):
             requests.packages.urllib3.disable_warnings()
 
         if self.verify and self.protocol == 'http':
-            print("[SplunkHandler DEBUG] " + 'cannot use SSL Verify and unsecure connection')
+            print("[SplunkHandler DEBUG] "
+                  + 'cannot use SSL Verify and unsecure connection')
 
         if self.proxies is not None:
             self.session.proxies = self.proxies
@@ -148,8 +158,10 @@ class SplunkHandler(logging.Handler):
                       backoff_factor=self.retry_backoff,
                       method_whitelist=False,  # Retry for any HTTP verb
                       status_forcelist=[500, 502, 503, 504])
-        self.session.mount(self.protocol + '://', HTTPAdapter(max_retries=retry))
+        self.session.mount(self.protocol
+                           + '://', HTTPAdapter(max_retries=retry))
 
+        self.worker_thread = None
         self.start_worker_thread()
 
         self.write_debug_log("Class initialize complete")
@@ -166,12 +178,13 @@ class SplunkHandler(logging.Handler):
 
         if self.flush_interval <= 0:
             # Flush log immediately; is blocking call
-            self._splunk_worker(payload=record)
+            self._send_payload(payload=record)
             return
 
         self.write_debug_log("Writing record to log queue")
 
-        # If force keep ahead, sleep until space in queue to prevent falling behind
+        # If force keep ahead, sleep until space
+        # in queue to prevent falling behind
         while self.force_keep_ahead and len(self.queue) >= self.max_queue_size:
             time.sleep(self.alt_flush_interval)
 
@@ -191,11 +204,12 @@ class SplunkHandler(logging.Handler):
 
     def start_worker_thread(self):
         # Start a worker thread responsible for sending logs
-        if self.flush_interval > 0:
-            self.write_debug_log("Preparing to spin off first worker thread Timer")
-            self.timer = Timer(self.flush_interval, self._splunk_worker)
-            self.timer.daemon = True  # Auto-kill thread if main process exits
-            self.timer.start()
+
+        self.write_debug_log("Starting worker thread.")
+        self.worker_thread = Thread(target=self._splunk_worker)
+        # Auto-kill thread if main process exits
+        self.worker_thread.daemon = True
+        self.worker_thread.start()
 
     def write_log(self, log_message):
         print("[SplunkHandler] " + log_message)
@@ -240,19 +254,19 @@ class SplunkHandler(logging.Handler):
                 pass
         return val
 
-    def _splunk_worker(self, payload=None):
-        self.write_debug_log("_splunk_worker() called")
+    def _send_payload(self, payload):
+        r = self.session.post(
+            self.url,
+            data=payload,
+            headers={'Authorization': "Splunk %s" % self.token},
+            verify=self.verify,
+            timeout=self.timeout
+        )
+        r.raise_for_status()  # Throws exception for 4xx/5xx status
 
-        if self.flush_interval > 0:
-            # Stop the timer. Happens automatically if this is called
-            # via the timer, does not if invoked by force_flush()
-            self.timer.cancel()
-            self.processing_payload = True
-            queue_is_empty = self.empty_queue()
-
-        if not payload:
-            payload = self.log_payload
-            self.log_payload = ""
+    def _flush_logs(self):
+        self.processing_payload = True
+        payload = self.empty_queue()
 
         if payload:
             self.write_debug_log("Payload available for sending")
@@ -260,68 +274,66 @@ class SplunkHandler(logging.Handler):
 
             try:
                 self.write_debug_log("Sending payload: " + payload)
-                r = self.session.post(
-                    self.url,
-                    data=payload,
-                    headers={'Authorization': "Splunk %s" % self.token},
-                    verify=self.verify,
-                    timeout=self.timeout
-                )
-                r.raise_for_status()  # Throws exception for 4xx/5xx status
+                self._send_payload(payload)
                 self.write_debug_log("Payload sent successfully")
-
             except Exception as e:
                 try:
-                    self.write_log("Exception in Splunk logging handler: %s" % str(e))
+                    self.write_log(
+                        "Exception in Splunk logging handler: %s" % str(e))
                     self.write_log(traceback.format_exc())
                 except Exception:
-                    self.write_debug_log("Exception encountered," +
-                                         "but traceback could not be formatted")
-
+                    self.write_debug_log(
+                        "Exception encountered," +
+                        "but traceback could not be formatted"
+                    )
         else:
-            self.write_debug_log("Timer thread executed but no payload was available to send")
-
-        # Restart the timer
-        if self.flush_interval > 0:
-            timer_interval = self.flush_interval
-            if self.SIGTERM:
-                self.write_debug_log("Timer reset aborted due to SIGTERM received")
-            else:
-                if not queue_is_empty:
-                    self.write_debug_log("Queue not empty, scheduling timer to run immediately")
-                    # Start up again right away if queue was not cleared
-                    timer_interval = self.alt_flush_interval
-
-                self.write_debug_log("Resetting timer thread")
-                self.timer = Timer(timer_interval, self._splunk_worker)
-                self.timer.daemon = True  # Auto-kill thread if main process exits
-                self.timer.start()
-                self.write_debug_log("Timer thread scheduled")
+            self.write_debug_log("No payload was available to send")
         self.processing_payload = False
+
+    def _splunk_worker(self):
+        time_end = 0
+        time_start = 0
+        self.running = True
+        while self.running:
+            sleep_amount = self.flush_interval - (time_end - time_start)
+            time.sleep(max(sleep_amount, 0))
+            time_start = time.time()
+            self._flush_logs()
+
+            if self.SIGTERM:
+                self.write_debug_log(
+                    "Timer reset aborted due to SIGTERM received")
+                self.running = False
+
+            time_end = time.time()
 
     def empty_queue(self):
         if len(self.queue) == 0:
             self.write_debug_log("Queue was empty")
-            return True
+            return ""
 
-        self.write_debug_log("Recursing through queue")
+        self.write_debug_log("Creating payload")
+        log_payload = ""
         if self.SIGTERM:
-            self.log_payload += ''.join(self.queue)
+            log_payload += ''.join(self.queue)
             self.queue.clear()
         else:
-            # without looking at each item, estimate how many can fit in 50 MB
+            # without looking at each item,
+            # estimate how many can fit in 50 MB
             apprx_size_base = len(self.queue[0])
-            # dont count more than what is in queue to ensure the same number as pulled are deleted
+            # dont count more than what is in queue
+            # to ensure the same number as pulled are deleted
+            # Note (avass): 524288 is 50MB/100
             count = min(int(524288 / apprx_size_base), len(self.queue))
-            self.log_payload += ''.join(self.queue[:count])
+            log_payload += ''.join(self.queue[:count])
             del self.queue[:count]
         self.write_debug_log("Queue task completed")
 
-        return len(self.queue) > 0
+        return log_payload
 
     def force_flush(self):
         self.write_debug_log("Force flush requested")
-        self._splunk_worker()
+        self._flush_logs()
         self.wait_until_empty()  # guarantees queue is emptied
 
     def shutdown(self):
@@ -332,14 +344,13 @@ class SplunkHandler(logging.Handler):
             return
 
         self.write_debug_log("Setting instance SIGTERM=True")
+        self.running = False
         self.SIGTERM = True
 
-        if self.flush_interval > 0:
-            self.timer.cancel()  # Cancels the scheduled Timer, allows exit immediately
-
-        self.write_debug_log("Starting up the final run of the worker thread before shutdown")
+        self.write_debug_log(
+            "Starting up the final run of the worker thread before shutdown")
         # Send the remaining items that might be sitting in queue.
-        self._splunk_worker()
+        self._flush_logs()
         self.wait_until_empty()  # guarantees queue is emptied before exit
 
     def wait_until_empty(self):
