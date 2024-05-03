@@ -296,7 +296,12 @@ class SplunkHandler(logging.Handler):
             sleep_amount = self.flush_interval - (time_end - time_start)
             time.sleep(max(sleep_amount, 0))
             time_start = time.time()
-            self._flush_logs()
+            try:
+                self._flush_logs()
+            except Exception as e:
+                self.write_log("Failed to flush logs, emptying queue.")
+                self.queue.clear()
+                self.write_log(str(e))
 
             if self.SIGTERM:
                 self.write_debug_log(
